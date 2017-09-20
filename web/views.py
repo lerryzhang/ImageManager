@@ -1,6 +1,6 @@
 #coding=utf-8
 from web import app
-from flask import render_template,request,redirect,url_for,json,session
+from flask import render_template,request,redirect,url_for,json,session,make_response
 from werkzeug.utils import secure_filename
 from form import forms
 from rutil import rutil
@@ -8,8 +8,35 @@ from web.model.models import User,Image,login,listAllUser,getUser,saveUser,findI
 import datetime
 import os
 
+import sys
+
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+
+@app.before_request
+def before_request():
+    if session is not None and session.has_key('username') and session.has_key('uid') and session['username'] is not None and session['uid'] is not None:
+        return
+    else:
+        account = request.cookies.get('account')
+        if account is not None:
+            accountArray = str(account).split('_')
+            username = accountArray[0]
+            uid = accountArray[1]
+            session['username'] = username
+            session['uid'] = uid
+            return
+        else:
+            return redirect(url_for('main'))
+
+
 @app.route('/')
 def index():
+   return redirect(url_for('listUser'))
+
+@app.route('/main')
+def main():
     registerform = forms.RegisterForm()
     loginform=forms.LoginForm()
     return render_template('login.html',registerform=registerform,loginform=loginform)
@@ -17,17 +44,17 @@ def index():
 
 @app.route('/deleteUser',methods=['GET'])
 def deleteUser():
-    dict1=None
+    dict=None
     id=request.args.get("id")
     if id is not None:
         user=getUser(id)
         if user is not None:
             user.status=3
             saveUser(user)
-            dict1 = {'mess': 'true'};
+            dict = {'mess': 'true'};
         else:
-            dict1 = {'mess': 'false'};
-    return json.dumps(dict1)
+            dict = {'mess': 'false'};
+    return json.dumps(dict)
 
 @app.route('/editUser',methods = ['POST'])
 def editUser():
@@ -49,6 +76,7 @@ def submitLogin():
     registerform = forms.RegisterForm()
     if form.validate_on_submit():
         username= request.form.get('username', None)
+        remember_me = str(form.remember_me.data)
         password = rutil().md5(request.form.get('password', None))
         user=login(username,password,0)
         if user is not None:
@@ -57,15 +85,19 @@ def submitLogin():
             saveUser(user)
             session['uid']=user.id
             session['username']=user.username
-            return redirect(url_for('listUser'))
+            response = make_response(redirect(url_for('listUser')))
+            if 'True'==remember_me:
+                outdate = datetime.datetime.today() + datetime.timedelta(days=30)
+                response.set_cookie('account', value='%s%s%s'%(user.username,'_',user.id), expires=outdate)
+            return response
     return render_template('login.html', loginform=form,registerform=registerform)
 
 @app.route('/logout')
 def submitLogout():
     session.pop('username', None)
     session.pop('uid', None)
-    dict1 = {'mess': 'true'};
-    return json.dumps(dict1)
+    dict = {'mess': 'true'};
+    return json.dumps(dict)
 
 
 @app.route('/register',methods = ['GET', 'POST'])
@@ -109,8 +141,8 @@ def upload():
     file.save(upload_path)
     image= Image(name=file.filename, storename=newFileName, filesize= len(file.read()),createtime=datetime.datetime.now(), createip=request.remote_addr,createuid=session['uid'],content=content)
     saveImage(image)
-    dict1 = {'mess': 'true'};
-    return json.dumps(dict1)
+    dict= {'mess': 'true'};
+    return json.dumps(dict)
 
 
 @app.route('/deleteImage')
