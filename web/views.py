@@ -7,15 +7,16 @@ from rutil import rutil
 from web.model.models import User,Image,login,listAllUser,getUser,saveUser,findIamge,saveImage,getImage,delImage
 import datetime
 import os
-
 import sys
-
 reload(sys)
 sys.setdefaultencoding('utf8')
 
 
 @app.before_request
 def before_request():
+    url=request.url
+    if 'login'in url or 'main' in url:
+        return
     if session is not None and session.has_key('username') and session.has_key('uid') and session['username'] is not None and session['uid'] is not None:
         return
     else:
@@ -29,7 +30,6 @@ def before_request():
             return
         else:
             return redirect(url_for('main'))
-
 
 @app.route('/')
 def index():
